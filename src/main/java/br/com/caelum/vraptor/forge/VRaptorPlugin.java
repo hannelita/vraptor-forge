@@ -21,6 +21,9 @@ import org.jboss.forge.shell.plugins.PipeOut;
 import org.jboss.forge.spec.javaee.PersistenceFacet;
 import org.jboss.shrinkwrap.descriptor.api.spec.jpa.persistence.PersistenceDescriptor;
 
+import br.com.caelum.vraptor.forge.config.xml.ServletVersion;
+import br.com.caelum.vraptor.forge.config.xml.WebApp;
+
 public @Alias("vraptor")
 class VRaptorPlugin implements org.jboss.forge.shell.plugins.Plugin {
 
@@ -34,9 +37,6 @@ class VRaptorPlugin implements org.jboss.forge.shell.plugins.Plugin {
 	@Inject
 	private Project project;
 
-	@Inject
-	private XMLParser parser;
-
 	@DefaultCommand
 	public void defaultCommand(PipeOut out) {
 		out.println("Welcome to VRaptor Forge Plugin");
@@ -46,64 +46,30 @@ class VRaptorPlugin implements org.jboss.forge.shell.plugins.Plugin {
 	public void setup(PipeOut out) {
 		DependencyFacet deps = project.getFacet(DependencyFacet.class);
 
-		DependencyBuilder springAsm = DependencyBuilder
-				.create("org.springframework:spring-asm:3.1.0.RC1");
+		DependencyBuilder springAsm = DependencyBuilder.create("org.springframework:spring-asm:3.1.0.RC1");
 		deps.addDependency(springAsm);
 
 		// Add the Spring beans dependency
-		DependencyBuilder springBeans = DependencyBuilder
-				.create("org.springframework:spring-beans:3.1.0.RC1");
+		DependencyBuilder springBeans = DependencyBuilder.create("org.springframework:spring-beans:3.1.0.RC1");
 		deps.addDependency(springBeans);
 
 		out.println("VRaptor dependencies to pom.xml.");
+		
+		WebApp webapp = new WebApp(ServletVersion.VERSION2_5, project);
 
+		webapp.addContextParam("br.com.caelum.vraptor.encoding", "UTF-8");
+		webapp.addContextParam("br.com.caelum.vraptor.packages", "br.com.caelum.vraptor.util.jpa");
+		
+		webapp.addFilter("sitemesh", "com.opensymphony.sitemesh.webapp.SiteMeshFilter");
+		webapp.addFilter("vraptor", "br.com.caelum.vraptor.VRaptor");
+		
 		ResourceFacet resources = project.getFacet(ResourceFacet.class);
-		Node webapp = new Node("web-app");
-		webapp.attribute("xmlns:xsi",
-				"http://www.w3.org/2001/XMLSchema-instance");
-		webapp.attribute("xmlns", "http://java.sun.com/xml/ns/javaee");
-		webapp.attribute("xmlns:jsp", "http://java.sun.com/xml/ns/javaee/jsp");
-		webapp.attribute("xmlns:web",
-				"http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd");
-		webapp.attribute(
-				"xsi:schemaLocation",
-				"http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd");
-		webapp.attribute("version", "2.5");
-
 		
-		MetadataFacet meta = project.getFacet(MetadataFacet.class);
-		String projectName = meta.getProjectName();		
-		Node displayName = new Node("display", webapp);
-		displayName.text(projectName);
-		Node contextParam = new Node("context-param", webapp);
-		Node contextConfig = new Node("param-name", contextParam);
-		contextConfig.text("br.com.caelum.vraptor.packages");
-		Node configLocation = new Node("param-value", contextParam);
-		configLocation.text("br.com.caelum.vraptor.util.jpa");
-
-		
-		Node contextParam2 = new Node("context-param", webapp);
-		Node contextConfig2 = new Node("param-name", contextParam2);
-		contextConfig2.text("br.com.caelum.vraptor.encoding");
-		Node configLocation2 = new Node("param-value", contextParam2);
-		configLocation2.text("UTF-8");
-		
-		Node filter = new Node("filter", webapp);
-		Node filterName = new Node("filter-name", filter);
-		filterName.text("sitemesh");
-		Node filterClass = new Node("filter-class", filter);
-		filterClass.text("com.opensymphony.sitemesh.webapp.SiteMeshFilter");
-		
-		Node filter2 = new Node("filter", webapp);
-		Node filterName2 = new Node("filter-name", filter2);
-		filterName2.text("vraptor");
-		Node filterClass2 = new Node("filter-class", filter2);
-		filterClass2.text("br.com.caelum.vraptor.VRaptor");
-		
-		
-		String file = parser.toXMLString(webapp);
+		String file = XMLParser.toXMLString(webapp.get());
 		resources.createResource(file.toCharArray(),
 				"../webapp/WEB-INF/web.xml");
+		
+		out.println("Arquive web.xml created.");
 	}
 
 	@Command("persistence")
@@ -162,7 +128,7 @@ class VRaptorPlugin implements org.jboss.forge.shell.plugins.Plugin {
 		Node tx = new Node("tx:annotation-driven", beans);
 
 		// Write the XML tree to a file, using the <beans> root node.
-		String file = parser.toXMLString(beans);
+		String file = XMLParser.toXMLString(beans);
 		resources.createResource(file.toCharArray(),
 				"META-INF/applicationContext.xml");
 
@@ -204,7 +170,7 @@ class VRaptorPlugin implements org.jboss.forge.shell.plugins.Plugin {
 				persistenceContextRef);
 		persistenceUnitName.text(unitName);
 
-		file = parser.toXMLString(webapp);
+		file = XMLParser.toXMLString(webapp);
 		resources.createResource(file.toCharArray(),
 				"../webapp/WEB-INF/web.xml");
 	}
@@ -265,7 +231,7 @@ class VRaptorPlugin implements org.jboss.forge.shell.plugins.Plugin {
 		mvcStatic.attribute("location", "/");
 
 		// Write the mvc-context.xml file.
-		String file = parser.toXMLString(beans);
+		String file = XMLParser.toXMLString(beans);
 		String filename = projectName.toLowerCase().replace(' ', '-');
 		resources.createResource(file.toCharArray(), "../webapp/WEB-INF/"
 				+ filename + "-mvc-context.xml");
@@ -274,7 +240,7 @@ class VRaptorPlugin implements org.jboss.forge.shell.plugins.Plugin {
 
 		FileResource<?> webXML = resources
 				.getResource("../webapp/WEB-INF/web.xml");
-		Node webapp = parser.parse(webXML.getResourceInputStream());
+		Node webapp = XMLParser.parse(webXML.getResourceInputStream());
 
 		// Define a Dispatcher servlet, named after the project.
 		Node servlet = new Node("servlet", webapp);
@@ -297,7 +263,7 @@ class VRaptorPlugin implements org.jboss.forge.shell.plugins.Plugin {
 		Node url = new Node("url-pattern", servletMapping);
 		url.text('/');
 
-		file = parser.toXMLString(webapp);
+		file = XMLParser.toXMLString(webapp);
 		resources.createResource(file.toCharArray(),
 				"../webapp/WEB-INF/web.xml");
 	}
